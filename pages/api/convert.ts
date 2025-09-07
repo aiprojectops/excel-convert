@@ -33,7 +33,7 @@ interface SuccessResponse {
 function parseFormData(req: NextApiRequest): Promise<{ fields: any; files: any }> {
   return new Promise((resolve, reject) => {
     const form = new IncomingForm({
-      maxFileSize: 20 * 1024 * 1024, // 20MB
+      maxFileSize: 50 * 1024 * 1024, // 50MB (긴 헤더 필드 고려)
       keepExtensions: true,
       multiples: false,
     });
@@ -158,7 +158,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     // 파일 크기 초과 에러
     if (error instanceof Error && error.message && error.message.includes('maxFileSize')) {
-      return sendError(res, '파일이 너무 큽니다. 최대 20MB까지 지원합니다.', 413, 'FILE_TOO_LARGE');
+      return sendError(res, '파일이 너무 큽니다. 최대 50MB까지 지원합니다.', 413, 'FILE_TOO_LARGE');
     }
     
     // 일반 에러

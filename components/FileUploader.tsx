@@ -6,7 +6,7 @@ import { clsx } from 'clsx';
 
 // 지원하는 파일 확장자
 const SUPPORTED_EXTENSIONS = ['.xls', '.xlsx', '.csv', '.tsv', '.txt'];
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 // 파일 상태 타입
 type FileStatus = 'idle' | 'uploading' | 'converting' | 'success' | 'error';
@@ -274,7 +274,7 @@ export default function FileUploader() {
                 파일을 드래그하거나 클릭하여 선택하세요
               </p>
               <p className="text-sm text-gray-500">
-                지원 형식: .xls, .xlsx, .csv, .tsv, .txt (최대 20MB)
+                지원 형식: .xls, .xlsx, .csv, .tsv, .txt (최대 50MB)
               </p>
             </>
           )}

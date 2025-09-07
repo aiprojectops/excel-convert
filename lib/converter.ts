@@ -6,8 +6,8 @@ import { parseISO, isValid, format } from 'date-fns';
 // 지원하는 파일 확장자
 export const SUPPORTED_EXTENSIONS = ['.xls', '.xlsx', '.csv', '.tsv', '.txt'];
 
-// 최대 파일 크기 (20MB)
-export const MAX_FILE_SIZE = 20 * 1024 * 1024;
+// 최대 파일 크기 (50MB로 증가 - 긴 헤더 필드 고려)
+export const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 /**
  * 파일 확장자 검증
@@ -90,37 +90,87 @@ function detectAndDecode(buffer: Buffer): string {
 }
 
 /**
- * CSV 구분자 추정
+ * CSV 구분자 추정 (개선된 버전)
  */
 function detectDelimiter(text: string): string {
-  const lines = text.split('\n').slice(0, 5); // 처음 5줄만 검사
+  const lines = text.split('\n').slice(0, 10).filter(line => line.trim()); // 더 많은 줄 검사
   const delimiters = ['\t', ',', ';', '|'];
   
   let bestDelimiter = ',';
-  let maxColumns = 0;
+  let maxScore = 0;
   
   for (const delimiter of delimiters) {
-    let totalColumns = 0;
-    let validLines = 0;
+    let score = 0;
+    let columnCounts: number[] = [];
     
     for (const line of lines) {
       if (line.trim()) {
-        const columns = line.split(delimiter).length;
-        if (columns > 1) {
-          totalColumns += columns;
-          validLines++;
+        // 따옴표 안의 구분자는 무시하고 파싱
+        const columns = parseCSVLine(line, delimiter);
+        const columnCount = columns.length;
+        
+        if (columnCount > 1) {
+          columnCounts.push(columnCount);
         }
       }
     }
     
-    const avgColumns = validLines > 0 ? totalColumns / validLines : 0;
-    if (avgColumns > maxColumns) {
-      maxColumns = avgColumns;
-      bestDelimiter = delimiter;
+    if (columnCounts.length > 0) {
+      // 일관성 있는 컬럼 수를 가진 구분자에 높은 점수
+      const avgColumns = columnCounts.reduce((a, b) => a + b, 0) / columnCounts.length;
+      const consistency = 1 - (Math.max(...columnCounts) - Math.min(...columnCounts)) / avgColumns;
+      score = avgColumns * consistency * columnCounts.length;
+      
+      if (score > maxScore) {
+        maxScore = score;
+        bestDelimiter = delimiter;
+      }
     }
   }
   
   return bestDelimiter;
+}
+
+/**
+ * CSV 라인 파싱 (따옴표 고려)
+ */
+function parseCSVLine(line: string, delimiter: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  let quoteChar = '';
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (!inQuotes) {
+      if (char === '"' || char === "'") {
+        inQuotes = true;
+        quoteChar = char;
+      } else if (char === delimiter) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    } else {
+      if (char === quoteChar) {
+        // 다음 문자가 같은 따옴표면 이스케이프된 따옴표
+        if (i + 1 < line.length && line[i + 1] === quoteChar) {
+          current += char;
+          i++; // 다음 문자 건너뛰기
+        } else {
+          inQuotes = false;
+          quoteChar = '';
+        }
+      } else {
+        current += char;
+      }
+    }
+  }
+  
+  result.push(current.trim());
+  return result;
 }
 
 /**
@@ -188,20 +238,41 @@ function normalizeCell(value: string): any {
 }
 
 /**
- * 텍스트 기반 복구 (CSV/TSV 파싱)
+ * 텍스트 기반 복구 (CSV/TSV 파싱) - 개선된 버전
  */
 function textBasedRecovery(buffer: Buffer): XLSX.WorkBook {
   const text = detectAndDecode(buffer);
   const delimiter = detectDelimiter(text);
   
+  console.log(`텍스트 복구 시작: 구분자="${delimiter}"`);
+  
   const lines = text.split('\n').filter(line => line.trim());
   const data: any[][] = [];
   
+  // 각 라인을 올바르게 파싱
   for (const line of lines) {
-    const cells = line.split(delimiter).map(cell => 
-      normalizeCell(cell.replace(/^["']|["']$/g, '')) // 따옴표 제거
-    );
-    data.push(cells);
+    try {
+      const cells = parseCSVLine(line, delimiter).map(cell => normalizeCell(cell));
+      
+      // 빈 행이 아닌 경우에만 추가
+      if (cells.some(cell => cell !== null && cell !== '')) {
+        data.push(cells);
+      }
+    } catch (error) {
+      console.warn('라인 파싱 실패:', line.substring(0, 100) + '...');
+      // 파싱 실패한 라인은 단순 분할로 처리
+      const cells = line.split(delimiter).map(cell => normalizeCell(cell.trim()));
+      if (cells.some(cell => cell !== null && cell !== '')) {
+        data.push(cells);
+      }
+    }
+  }
+  
+  console.log(`파싱 완료: ${data.length}행, 평균 ${data.length > 0 ? Math.round(data.reduce((sum, row) => sum + row.length, 0) / data.length) : 0}열`);
+  
+  // 데이터가 없으면 에러
+  if (data.length === 0) {
+    throw new Error('파싱된 데이터가 없습니다. 파일 형식을 확인해주세요.');
   }
   
   // 빈 워크북 생성
