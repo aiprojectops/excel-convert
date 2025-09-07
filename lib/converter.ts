@@ -90,11 +90,13 @@ function detectAndDecode(buffer: Buffer): string {
 }
 
 /**
- * CSV 구분자 추정 (개선된 버전)
+ * CSV 구분자 추정 (개선된 버전 - 복잡한 헤더 고려)
  */
 function detectDelimiter(text: string): string {
   const lines = text.split('\n').slice(0, 10).filter(line => line.trim()); // 더 많은 줄 검사
   const delimiters = ['\t', ',', ';', '|'];
+  
+  console.log('구분자 감지 시작, 첫 번째 라인:', lines[0]?.substring(0, 200));
   
   let bestDelimiter = ',';
   let maxScore = 0;
@@ -105,10 +107,11 @@ function detectDelimiter(text: string): string {
     
     for (const line of lines) {
       if (line.trim()) {
-        // 따옴표 안의 구분자는 무시하고 파싱
-        const columns = parseCSVLine(line, delimiter);
-        const columnCount = columns.length;
+        // 간단한 분할로 먼저 테스트 (성능상 이유)
+        const simpleColumns = line.split(delimiter);
+        const columnCount = simpleColumns.length;
         
+        // 괄호가 포함된 복잡한 헤더의 경우 더 관대하게 처리
         if (columnCount > 1) {
           columnCounts.push(columnCount);
         }
@@ -118,8 +121,14 @@ function detectDelimiter(text: string): string {
     if (columnCounts.length > 0) {
       // 일관성 있는 컬럼 수를 가진 구분자에 높은 점수
       const avgColumns = columnCounts.reduce((a, b) => a + b, 0) / columnCounts.length;
-      const consistency = 1 - (Math.max(...columnCounts) - Math.min(...columnCounts)) / avgColumns;
-      score = avgColumns * consistency * columnCounts.length;
+      const maxCols = Math.max(...columnCounts);
+      const minCols = Math.min(...columnCounts);
+      
+      // 복잡한 헤더의 경우 일관성 요구사항을 완화
+      const consistency = maxCols > 10 ? 0.8 : (1 - (maxCols - minCols) / Math.max(avgColumns, 1));
+      score = avgColumns * Math.max(consistency, 0.5) * columnCounts.length;
+      
+      console.log(`구분자 "${delimiter}": 평균 ${avgColumns.toFixed(1)}열, 일관성 ${consistency.toFixed(2)}, 점수 ${score.toFixed(1)}`);
       
       if (score > maxScore) {
         maxScore = score;
@@ -128,17 +137,21 @@ function detectDelimiter(text: string): string {
     }
   }
   
+  console.log(`선택된 구분자: "${bestDelimiter}"`);
   return bestDelimiter;
 }
 
 /**
- * CSV 라인 파싱 (따옴표 고려)
+ * CSV 라인 파싱 (따옴표 및 특수문자 고려)
  */
 function parseCSVLine(line: string, delimiter: string): string[] {
   const result: string[] = [];
   let current = '';
   let inQuotes = false;
   let quoteChar = '';
+  
+  // 라인 전처리: 불필요한 공백 제거 및 정규화
+  line = line.trim();
   
   for (let i = 0; i < line.length; i++) {
     const char = line[i];
@@ -148,7 +161,9 @@ function parseCSVLine(line: string, delimiter: string): string[] {
         inQuotes = true;
         quoteChar = char;
       } else if (char === delimiter) {
-        result.push(current.trim());
+        // 현재 셀 내용 정리 및 추가
+        const cellContent = current.trim();
+        result.push(cellContent);
         current = '';
       } else {
         current += char;
@@ -169,26 +184,35 @@ function parseCSVLine(line: string, delimiter: string): string[] {
     }
   }
   
-  result.push(current.trim());
-  return result;
+  // 마지막 셀 추가
+  const lastCell = current.trim();
+  result.push(lastCell);
+  
+  // 빈 셀들을 null로 변환하지 않고 빈 문자열로 유지
+  return result.map(cell => cell || '');
 }
 
 /**
- * 셀 값 정규화 (타입 변환)
+ * 셀 값 정규화 (타입 변환) - 특수문자 처리 강화
  */
 function normalizeCell(value: string): any {
   if (!value || value.trim() === '') {
-    return null;
+    return '';  // null 대신 빈 문자열 반환
   }
   
   const trimmed = value.trim();
   
-  // 1. 숫자 처리
+  // 특수문자가 많은 헤더 필드는 문자열로 유지
+  if (trimmed.includes('(') && trimmed.includes(')')) {
+    return trimmed;  // 괄호가 포함된 복잡한 텍스트는 그대로 유지
+  }
+  
+  // 1. 숫자 처리 (더 엄격한 검증)
   const numberMatch = trimmed.match(/^-?[\d,]+\.?\d*$/);
-  if (numberMatch) {
+  if (numberMatch && !trimmed.includes('(')) {  // 괄호가 없는 경우만
     const cleaned = trimmed.replace(/,/g, '');
     const num = parseFloat(cleaned);
-    if (!isNaN(num)) {
+    if (!isNaN(num) && isFinite(num)) {
       return num;
     }
   }
@@ -198,29 +222,21 @@ function normalizeCell(value: string): any {
   if (percentMatch) {
     const cleaned = percentMatch[1].replace(/,/g, '');
     const num = parseFloat(cleaned);
-    if (!isNaN(num)) {
+    if (!isNaN(num) && isFinite(num)) {
       return num / 100; // Excel 퍼센트 형식
     }
   }
   
-  // 3. 날짜 처리
-  const datePatterns = [
-    /^\d{4}-\d{2}-\d{2}$/,
-    /^\d{4}\/\d{1,2}\/\d{1,2}$/,
-    /^\d{1,2}\/\d{1,2}\/\d{4}$/,
-    /^\d{4}\.\d{1,2}\.\d{1,2}$/,
-  ];
-  
-  for (const pattern of datePatterns) {
-    if (pattern.test(trimmed)) {
-      try {
-        const date = parseISO(trimmed.replace(/\//g, '-').replace(/\./g, '-'));
-        if (isValid(date)) {
-          return date;
-        }
-      } catch (e) {
-        // 날짜 파싱 실패, 계속 진행
+  // 3. 날짜 처리 (간단한 패턴만)
+  const simpleDatePattern = /^\d{4}-\d{2}-\d{2}$/;
+  if (simpleDatePattern.test(trimmed)) {
+    try {
+      const date = parseISO(trimmed);
+      if (isValid(date)) {
+        return date;
       }
+    } catch (e) {
+      // 날짜 파싱 실패, 문자열로 처리
     }
   }
   
@@ -245,30 +261,97 @@ function textBasedRecovery(buffer: Buffer): XLSX.WorkBook {
   const delimiter = detectDelimiter(text);
   
   console.log(`텍스트 복구 시작: 구분자="${delimiter}"`);
+  console.log(`전체 텍스트 길이: ${text.length}, 첫 200자:`, text.substring(0, 200));
   
   const lines = text.split('\n').filter(line => line.trim());
+  console.log(`유효한 라인 수: ${lines.length}`);
   const data: any[][] = [];
   
   // 각 라인을 올바르게 파싱
-  for (const line of lines) {
+  let maxColumns = 0;
+  
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex];
+    
     try {
       const cells = parseCSVLine(line, delimiter).map(cell => normalizeCell(cell));
+      
+      // 컬럼 수 추적
+      maxColumns = Math.max(maxColumns, cells.length);
       
       // 빈 행이 아닌 경우에만 추가
       if (cells.some(cell => cell !== null && cell !== '')) {
         data.push(cells);
       }
     } catch (error) {
-      console.warn('라인 파싱 실패:', line.substring(0, 100) + '...');
-      // 파싱 실패한 라인은 단순 분할로 처리
-      const cells = line.split(delimiter).map(cell => normalizeCell(cell.trim()));
-      if (cells.some(cell => cell !== null && cell !== '')) {
-        data.push(cells);
+      console.warn(`라인 ${lineIndex + 1} 파싱 실패:`, line.substring(0, 100) + '...');
+      
+      // 파싱 실패한 라인은 여러 방법으로 시도
+      let fallbackCells: any[] = [];
+      
+      // 방법 1: 단순 분할
+      try {
+        fallbackCells = line.split(delimiter).map(cell => normalizeCell(cell.trim()));
+      } catch (e1) {
+        console.warn('방법 1 실패, 방법 2 시도');
+        
+        // 방법 2: 쉼표로 분할 (delimiter가 다른 경우)
+        try {
+          fallbackCells = line.split(',').map(cell => normalizeCell(cell.trim()));
+        } catch (e2) {
+          console.warn('방법 2 실패, 방법 3 시도');
+          
+          // 방법 3: 탭으로 분할
+          try {
+            fallbackCells = line.split('\t').map(cell => normalizeCell(cell.trim()));
+          } catch (e3) {
+            console.warn('방법 3 실패, 방법 4 시도');
+            
+            // 방법 4: 공백으로 분할 (여러 공백은 하나로 처리)
+            try {
+              fallbackCells = line.split(/\s+/).filter(cell => cell.trim()).map(cell => normalizeCell(cell.trim()));
+            } catch (e4) {
+              console.warn('방법 4 실패, 전체를 하나의 셀로 처리');
+              // 방법 5: 전체를 하나의 셀로 처리
+              fallbackCells = [normalizeCell(line.trim())];
+            }
+          }
+        }
+      }
+      
+      if (fallbackCells.some(cell => cell !== null && cell !== '')) {
+        data.push(fallbackCells);
+        maxColumns = Math.max(maxColumns, fallbackCells.length);
       }
     }
   }
   
-  console.log(`파싱 완료: ${data.length}행, 평균 ${data.length > 0 ? Math.round(data.reduce((sum, row) => sum + row.length, 0) / data.length) : 0}열`);
+  // 모든 행의 컬럼 수를 맞춤 (빈 셀로 패딩)
+  data.forEach(row => {
+    while (row.length < maxColumns) {
+      row.push('');
+    }
+  });
+  
+  // 헤더 정리 (빈 헤더만 처리, 중복은 그대로 유지)
+  if (data.length > 0) {
+    const headerRow = data[0];
+    
+    for (let i = 0; i < headerRow.length; i++) {
+      let header = String(headerRow[i]).trim();
+      
+      // 빈 헤더만 처리 (중복은 그대로 유지)
+      if (!header) {
+        headerRow[i] = `컬럼${i + 1}`;
+      } else {
+        headerRow[i] = header;
+      }
+    }
+    
+    console.log('원본 헤더 유지:', headerRow.slice(0, 10)); // 처음 10개만 로그
+  }
+  
+  console.log(`파싱 완료: ${data.length}행, ${maxColumns}열`);
   
   // 데이터가 없으면 에러
   if (data.length === 0) {
