@@ -299,7 +299,7 @@ export async function convertToXlsx(
     
   } catch (error) {
     console.error('변환 실패:', error);
-    throw new Error(`파일 변환에 실패했습니다: ${error.message}`);
+    throw new Error(`파일 변환에 실패했습니다: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -363,7 +363,7 @@ export async function processFile(
       success: false,
       filename: originalFilename,
       originalSize: buffer.length,
-      message: error.message,
+      message: error instanceof Error ? error.message : String(error),
     };
   }
 }

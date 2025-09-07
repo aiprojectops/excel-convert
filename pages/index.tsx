@@ -50,12 +50,12 @@ export default function Home() {
                   사용법
                 </a>
                 <a 
-                  href="https://github.com" 
+                  href="https://runmoa.com" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-gray-600 hover:text-gray-900 transition-colors"
                 >
-                  GitHub
+                  런모아
                 </a>
               </nav>
             </div>
