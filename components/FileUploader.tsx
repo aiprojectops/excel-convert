@@ -36,6 +36,7 @@ export default function FileUploader() {
   const [dragOver, setDragOver] = useState(false);
   const [progress, setProgress] = useState(0);
   const [forceTextRecovery, setForceTextRecovery] = useState(false);
+  const [usePythonService, setUsePythonService] = useState(true); // Python 서비스 사용 여부
 
   // 참조
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -131,8 +132,11 @@ export default function FileUploader() {
       setStatus('converting');
       setProgress(50);
 
-      // API 호출
-      const response = await fetch('/api/convert', {
+      // API 호출 (Python 서비스 또는 기존 TypeScript)
+      const apiEndpoint = usePythonService ? '/api/convert-python' : '/api/convert';
+      console.log('🔧 사용할 API:', apiEndpoint);
+      
+      const response = await fetch(apiEndpoint, {
         method: 'POST',
         body: formData,
       });
@@ -148,8 +152,11 @@ export default function FileUploader() {
       // 응답 헤더에서 메타데이터 추출
       const originalSize = parseInt(response.headers.get('X-Original-Size') || '0');
       const convertedSize = parseInt(response.headers.get('X-Converted-Size') || '0');
+      const conversionMethod = response.headers.get('X-Conversion-Method') || 'unknown';
       const warningsHeader = response.headers.get('X-Warnings');
       const warnings = warningsHeader ? decodeURIComponent(warningsHeader).split('; ') : undefined;
+      
+      console.log('🔧 변환 방법:', conversionMethod);
 
       // 파일 다운로드 준비
       const blob = await response.blob();
@@ -374,16 +381,31 @@ export default function FileUploader() {
 
       {/* 옵션 */}
       {selectedFile && status === 'idle' && (
-        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+        <div className="mt-4 p-4 bg-gray-50 rounded-lg space-y-3">
           <label className="flex items-center space-x-2 text-sm">
             <input
               type="checkbox"
-              checked={forceTextRecovery}
-              onChange={(e) => setForceTextRecovery(e.target.checked)}
+              checked={usePythonService}
+              onChange={(e) => setUsePythonService(e.target.checked)}
               className="rounded border-gray-300"
             />
-            <span>텍스트 기반 복구 강제 실행 (표준 파서가 실패할 때 유용)</span>
+            <span className="font-medium">🐍 Python 서비스 사용 (권장)</span>
           </label>
+          <p className="text-xs text-gray-600 ml-6">
+            더 강력한 Excel 처리 엔진으로 구 Excel 파일과 한글 인코딩을 완벽 지원합니다.
+          </p>
+          
+          {!usePythonService && (
+            <label className="flex items-center space-x-2 text-sm">
+              <input
+                type="checkbox"
+                checked={forceTextRecovery}
+                onChange={(e) => setForceTextRecovery(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              <span>텍스트 기반 복구 강제 실행 (표준 파서가 실패할 때 유용)</span>
+            </label>
+          )}
         </div>
       )}
 
