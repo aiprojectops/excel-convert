@@ -3,12 +3,6 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['xlsx']
   },
-  api: {
-    bodyParser: {
-      sizeLimit: '20mb',
-    },
-    responseLimit: false,
-  },
   webpack: (config) => {
     // xlsx 라이브러리 최적화
     config.resolve.fallback = {

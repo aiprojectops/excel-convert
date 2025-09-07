@@ -275,7 +275,7 @@ export async function convertToXlsx(
         }
         
       } catch (standardError) {
-        console.log('표준 파서 실패, 텍스트 복구 시도:', standardError.message);
+        console.log('표준 파서 실패, 텍스트 복구 시도:', standardError instanceof Error ? standardError.message : String(standardError));
         // 2단계: 텍스트 기반 복구
         workbook = textBasedRecovery(buffer);
       }
