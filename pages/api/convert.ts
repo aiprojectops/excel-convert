@@ -73,6 +73,8 @@ function sendError(res: NextApiResponse, message: string, statusCode: number = 4
  * 메인 API 핸들러
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  console.log('🌐 API 호출됨:', req.method, req.url);
+  
   // CORS 헤더 설정
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -108,7 +110,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const forceTextRecovery = fields.forceTextRecovery === 'true';
     const metaOnly = fields.metaOnly === 'true'; // 메타데이터만 반환할지 여부
 
-    console.log(`변환 시작: ${uploadedFile.originalFilename} (${uploadedFile.size} bytes)`);
+    console.log('🚀 변환 시작:', uploadedFile.originalFilename, '(' + uploadedFile.size + ' bytes)');
 
     // 4. 파일 읽기
     const buffer = await readFileToBuffer(uploadedFile);

@@ -116,6 +116,7 @@ export default function FileUploader() {
   const handleConvert = useCallback(async () => {
     if (!selectedFile) return;
 
+    console.log('🚀 클라이언트: 변환 시작', selectedFile.name, selectedFile.size + ' bytes');
     setStatus('uploading');
     setError(null);
     setProgress(10);
@@ -126,6 +127,7 @@ export default function FileUploader() {
       formData.append('file', selectedFile);
       formData.append('forceTextRecovery', forceTextRecovery.toString());
 
+      console.log('📤 클라이언트: 서버로 파일 전송 중...');
       setStatus('converting');
       setProgress(50);
 
@@ -135,6 +137,7 @@ export default function FileUploader() {
         body: formData,
       });
 
+      console.log('📥 클라이언트: 서버 응답 받음', response.status, response.statusText);
       setProgress(80);
 
       if (!response.ok) {
@@ -150,11 +153,16 @@ export default function FileUploader() {
 
       // 파일 다운로드 준비
       const blob = await response.blob();
+      console.log('💾 클라이언트: 변환된 파일 크기', blob.size + ' bytes');
+      
       const downloadUrl = window.URL.createObjectURL(blob);
 
       // 결과 설정
       const baseName = selectedFile.name.replace(/\.[^.]+$/, '');
       const resultFilename = `${baseName}_변환완료.xlsx`;
+
+      console.log('✅ 클라이언트: 변환 완료!', resultFilename);
+      console.log('📊 클라이언트: 크기 비교 - 원본:', originalSize, '→ 변환:', convertedSize);
 
       setResult({
         success: true,
@@ -178,7 +186,7 @@ export default function FileUploader() {
       }, 500);
 
     } catch (err) {
-      console.error('변환 에러:', err);
+      console.error('❌ 클라이언트: 변환 에러', err);
       setError({
         message: err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.',
       });

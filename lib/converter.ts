@@ -260,11 +260,18 @@ function textBasedRecovery(buffer: Buffer): XLSX.WorkBook {
   const text = detectAndDecode(buffer);
   const delimiter = detectDelimiter(text);
   
-  console.log(`텍스트 복구 시작: 구분자="${delimiter}"`);
-  console.log(`전체 텍스트 길이: ${text.length}, 첫 200자:`, text.substring(0, 200));
+  console.log('🔄 텍스트 복구 시작: 구분자="' + delimiter + '"');
+  console.log('📄 전체 텍스트 길이:', text.length, '첫 200자:', text.substring(0, 200));
+  console.log('📄 마지막 200자:', text.substring(Math.max(0, text.length - 200)));
   
   const lines = text.split('\n').filter(line => line.trim());
   console.log(`유효한 라인 수: ${lines.length}`);
+  
+  // 처음 3줄 로그로 확인
+  lines.slice(0, 3).forEach((line, index) => {
+    console.log(`라인 ${index + 1} (${line.length}자):`, line.substring(0, 100) + (line.length > 100 ? '...' : ''));
+  });
+  
   const data: any[][] = [];
   
   // 각 라인을 올바르게 파싱
@@ -274,14 +281,21 @@ function textBasedRecovery(buffer: Buffer): XLSX.WorkBook {
     const line = lines[lineIndex];
     
     try {
-      const cells = parseCSVLine(line, delimiter).map(cell => normalizeCell(cell));
+      const cells = parseCSVLine(line, delimiter);
+      
+      // 헤더 행(첫 번째 행)은 정규화하지 않고 원본 유지
+      const processedCells = lineIndex === 0 
+        ? cells.map(cell => cell.trim() || `컬럼${cells.indexOf(cell) + 1}`)  // 헤더는 문자열로 유지
+        : cells.map(cell => normalizeCell(cell));  // 데이터 행만 정규화
       
       // 컬럼 수 추적
-      maxColumns = Math.max(maxColumns, cells.length);
+      maxColumns = Math.max(maxColumns, processedCells.length);
       
-      // 빈 행이 아닌 경우에만 추가
-      if (cells.some(cell => cell !== null && cell !== '')) {
-        data.push(cells);
+      // 첫 번째 행(헤더)은 무조건 추가, 나머지는 빈 행이 아닌 경우에만 추가
+      if (lineIndex === 0 || processedCells.some(cell => cell !== null && cell !== '')) {
+        data.push(processedCells);
+        console.log(`라인 ${lineIndex + 1} 파싱 성공: ${processedCells.length}개 셀`, 
+          lineIndex === 0 ? `(헤더: ${processedCells.slice(0, 3).join(', ')}...)` : '');
       }
     } catch (error) {
       console.warn(`라인 ${lineIndex + 1} 파싱 실패:`, line.substring(0, 100) + '...');
@@ -319,9 +333,16 @@ function textBasedRecovery(buffer: Buffer): XLSX.WorkBook {
         }
       }
       
-      if (fallbackCells.some(cell => cell !== null && cell !== '')) {
-        data.push(fallbackCells);
-        maxColumns = Math.max(maxColumns, fallbackCells.length);
+      // Fallback 셀 처리 (헤더 고려)
+      const processedFallbackCells = lineIndex === 0 
+        ? fallbackCells.map(cell => String(cell).trim() || `컬럼${fallbackCells.indexOf(cell) + 1}`)  // 헤더는 문자열로 유지
+        : fallbackCells.map(cell => normalizeCell(String(cell)));  // 데이터 행만 정규화
+      
+      // 첫 번째 행(헤더)은 무조건 추가, 나머지는 빈 행이 아닌 경우에만 추가
+      if (lineIndex === 0 || processedFallbackCells.some(cell => cell !== null && cell !== '')) {
+        data.push(processedFallbackCells);
+        maxColumns = Math.max(maxColumns, processedFallbackCells.length);
+        console.log(`라인 ${lineIndex + 1} fallback 파싱 성공: ${processedFallbackCells.length}개 셀`);
       }
     }
   }
@@ -333,22 +354,18 @@ function textBasedRecovery(buffer: Buffer): XLSX.WorkBook {
     }
   });
   
-  // 헤더 정리 (빈 헤더만 처리, 중복은 그대로 유지)
+  // 헤더 확인 로그
   if (data.length > 0) {
-    const headerRow = data[0];
+    console.log('최종 헤더 확인:', data[0].slice(0, 5)); // 처음 5개만 로그
+    console.log('헤더 개수:', data[0].length);
+    console.log('전체 데이터 행 수:', data.length);
     
-    for (let i = 0; i < headerRow.length; i++) {
-      let header = String(headerRow[i]).trim();
-      
-      // 빈 헤더만 처리 (중복은 그대로 유지)
-      if (!header) {
-        headerRow[i] = `컬럼${i + 1}`;
-      } else {
-        headerRow[i] = header;
-      }
+    // 데이터 샘플 확인
+    if (data.length > 1) {
+      console.log('두 번째 행 샘플:', data[1].slice(0, 5));
     }
-    
-    console.log('원본 헤더 유지:', headerRow.slice(0, 10)); // 처음 10개만 로그
+  } else {
+    console.error('❌ 파싱된 데이터가 없습니다!');
   }
   
   console.log(`파싱 완료: ${data.length}행, ${maxColumns}열`);
@@ -362,10 +379,15 @@ function textBasedRecovery(buffer: Buffer): XLSX.WorkBook {
   const workbook = XLSX.utils.book_new();
   
   // 데이터를 워크시트로 변환
+  console.log('워크시트 생성 중... 데이터 크기:', data.length, 'x', data[0]?.length || 0);
   const worksheet = XLSX.utils.aoa_to_sheet(data);
+  
+  // 워크시트 범위 확인
+  console.log('워크시트 범위:', worksheet['!ref']);
   
   // 워크시트를 워크북에 추가
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+  console.log('워크북에 시트 추가 완료');
   
   return workbook;
 }
@@ -374,15 +396,24 @@ function textBasedRecovery(buffer: Buffer): XLSX.WorkBook {
  * 워크북 데이터 정규화
  */
 function normalizeWorkbook(workbook: XLSX.WorkBook): XLSX.WorkBook {
+  console.log('🔧 normalizeWorkbook 시작, 시트 수:', workbook.SheetNames.length);
   const normalizedWorkbook = XLSX.utils.book_new();
   
-  workbook.SheetNames.forEach(sheetName => {
+  workbook.SheetNames.forEach((sheetName, index) => {
+    console.log(`🔧 시트 ${index + 1} 처리 중: "${sheetName}"`);
     const worksheet = workbook.Sheets[sheetName];
+    
     const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
       header: 1, 
       defval: null,
       raw: false 
     }) as any[][];
+    
+    console.log(`🔧 시트 "${sheetName}" 데이터: ${jsonData.length}행`);
+    if (jsonData.length > 0) {
+      console.log(`🔧 첫 번째 행 (헤더): ${jsonData[0].length}개 컬럼`);
+      console.log(`🔧 헤더 내용 (처음 5개):`, jsonData[0].slice(0, 5));
+    }
     
     // 각 셀 정규화
     const normalizedData = jsonData.map(row => 
@@ -395,6 +426,7 @@ function normalizeWorkbook(workbook: XLSX.WorkBook): XLSX.WorkBook {
     // 안전한 시트명 생성
     const safeSheetName = sanitizeFilename(sheetName).substring(0, 31);
     XLSX.utils.book_append_sheet(normalizedWorkbook, normalizedSheet, safeSheetName);
+    console.log(`🔧 시트 "${safeSheetName}" 정규화 완료`);
   });
   
   return normalizedWorkbook;
@@ -408,11 +440,22 @@ export async function convertToXlsx(
   filename: string,
   forceTextRecovery: boolean = false
 ): Promise<Buffer> {
+  console.log('🔧 convertToXlsx 함수 시작, 파일명:', filename, '크기:', buffer.length, 'bytes');
+  console.log('🔧 forceTextRecovery:', forceTextRecovery);
+
+  // .xlsx 파일은 이미 최신 형식이므로 변환 없이 반환
+  const fileExtension = filename.toLowerCase().split('.').pop();
+  if (fileExtension === 'xlsx') {
+    console.log('✅ 이미 .xlsx 파일이므로 변환 없이 반환');
+    return buffer;
+  }
+  
   try {
     let workbook: XLSX.WorkBook;
     
     if (!forceTextRecovery) {
       try {
+        console.log('🔧 표준 파서 시도 중...');
         // 1단계: 표준 파서 시도
         workbook = XLSX.read(buffer, {
           type: 'buffer',
@@ -422,14 +465,53 @@ export async function convertToXlsx(
           // 다양한 인코딩 시도
           codepage: 65001, // UTF-8
         });
+        console.log('🔧 XLSX.read 완료');
         
         // 워크북이 비어있지 않은지 확인
         if (workbook.SheetNames.length === 0) {
           throw new Error('빈 워크북');
         }
         
+        // 첫 번째 시트의 실제 데이터 확인
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet, { 
+          header: 1, 
+          defval: null,
+          raw: false 
+        }) as any[][];
+        
+        // 헤더가 모두 비어있거나 null이면 텍스트 복구로 전환
+        const hasValidHeader = jsonData.length > 0 && 
+          jsonData[0].some(cell => cell && String(cell).trim() !== '');
+        
+        if (!hasValidHeader) {
+          console.log('⚠️ 표준 파서로 읽은 헤더가 모두 비어있음, 텍스트 복구로 전환');
+          throw new Error('헤더가 비어있음 - 텍스트 복구 필요');
+        }
+        
+        console.log('✅ 표준 파서 성공! 시트 수:', workbook.SheetNames.length);
+        console.log('📋 시트 이름들:', workbook.SheetNames);
+        const range = firstSheet['!ref'];
+        console.log('📊 첫 번째 시트 범위:', range);
+        
+        // 첫 번째 행(헤더) 확인
+        if (range) {
+          const firstRowCells = [];
+          const endCol = range.split(':')[1]?.charAt(0) || 'A';
+          const endColCode = endCol.charCodeAt(0);
+          
+          for (let i = 65; i <= Math.min(endColCode, 75); i++) { // A~K까지만 확인
+            const cellAddr = String.fromCharCode(i) + '1';
+            const cell = firstSheet[cellAddr];
+            if (cell) {
+              firstRowCells.push(cell.v || cell.w || '');
+            }
+          }
+          console.log('🏷️ 표준 파서로 읽은 헤더 (처음 10개):', firstRowCells.slice(0, 10));
+        }
+        
       } catch (standardError) {
-        console.log('표준 파서 실패, 텍스트 복구 시도:', standardError instanceof Error ? standardError.message : String(standardError));
+        console.log('⚠️ 표준 파서 실패, 텍스트 복구 시도:', standardError instanceof Error ? standardError.message : String(standardError));
         // 2단계: 텍스트 기반 복구
         workbook = textBasedRecovery(buffer);
       }
@@ -439,15 +521,19 @@ export async function convertToXlsx(
     }
     
     // 3단계: 데이터 정규화
+    console.log('🔧 데이터 정규화 시작...');
     const normalizedWorkbook = normalizeWorkbook(workbook);
+    console.log('🔧 데이터 정규화 완료');
     
     // 4단계: .xlsx로 변환
+    console.log('🔧 .xlsx 버퍼 생성 시작...');
     const xlsxBuffer = XLSX.write(normalizedWorkbook, {
       type: 'buffer',
       bookType: 'xlsx',
       compression: true,
       cellDates: true,
     });
+    console.log('🔧 .xlsx 버퍼 생성 완료, 크기:', xlsxBuffer.length, 'bytes');
     
     return Buffer.from(xlsxBuffer);
     
@@ -498,10 +584,15 @@ export async function processFile(
     const safeBaseName = sanitizeFilename(baseName);
     const resultFilename = `${safeBaseName}_변환완료.xlsx`;
     
-    // 크기 비교 경고
-    if (convertedBuffer.length > buffer.length * 2) {
+    // 크기 비교 경고 (더 정확한 기준)
+    const sizeRatio = convertedBuffer.length / buffer.length;
+    if (sizeRatio > 3) {
       warnings.push('변환된 파일이 원본보다 상당히 큽니다. 데이터 확인을 권장합니다.');
+    } else if (sizeRatio < 0.1 && buffer.length > 1000) {
+      warnings.push('변환된 파일이 원본보다 상당히 작습니다. 데이터 손실이 있을 수 있습니다.');
     }
+    
+    console.log(`파일 크기 비교: 원본 ${buffer.length}bytes → 변환 ${convertedBuffer.length}bytes (비율: ${sizeRatio.toFixed(2)})`);
     
     return {
       success: true,
