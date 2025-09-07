@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "name": "excel-quick-convert",
+  "regions": ["icn1"],
+  "functions": {
+    "pages/api/convert.ts": {
+      "maxDuration": 10,
+      "memory": 1024
+    },
+    "pages/api/health.ts": {
+      "maxDuration": 5,
+      "memory": 128
+    }
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/health",
+      "destination": "/api/health"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
+}

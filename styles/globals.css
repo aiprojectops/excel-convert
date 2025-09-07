@@ -1,0 +1,184 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
+  }
+  
+  body {
+    @apply text-gray-900 bg-white;
+  }
+}
+
+@layer components {
+  /* 커스텀 스크롤바 */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-gray-100 rounded-full;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-full hover:bg-gray-400;
+  }
+
+  /* 파일 드래그 오버 애니메이션 */
+  .drag-over {
+    @apply border-primary-400 bg-primary-50 scale-105;
+    transition: all 0.2s ease-in-out;
+  }
+
+  /* 로딩 스피너 */
+  .spinner {
+    @apply animate-spin rounded-full border-2 border-gray-200 border-t-primary-600;
+  }
+
+  /* 성공 체크마크 애니메이션 */
+  .check-animation {
+    animation: checkmark 0.6s ease-in-out;
+  }
+
+  @keyframes checkmark {
+    0% {
+      transform: scale(0);
+      opacity: 0;
+    }
+    50% {
+      transform: scale(1.2);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  /* 진행률 바 애니메이션 */
+  .progress-bar {
+    transition: width 0.3s ease-in-out;
+  }
+
+  /* 버튼 호버 효과 */
+  .btn-primary {
+    @apply px-6 py-3 bg-primary-600 text-white rounded-lg font-medium transition-all duration-200 hover:bg-primary-700 hover:shadow-lg active:scale-95;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3 bg-gray-600 text-white rounded-lg font-medium transition-all duration-200 hover:bg-gray-700 hover:shadow-lg active:scale-95;
+  }
+
+  .btn-success {
+    @apply px-6 py-3 bg-green-600 text-white rounded-lg font-medium transition-all duration-200 hover:bg-green-700 hover:shadow-lg active:scale-95;
+  }
+
+  /* 카드 스타일 */
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6 transition-shadow duration-200 hover:shadow-md;
+  }
+
+  /* 알림 스타일 */
+  .alert-info {
+    @apply bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg;
+  }
+
+  .alert-warning {
+    @apply bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded-lg;
+  }
+
+  .alert-error {
+    @apply bg-red-50 border border-red-200 text-red-800 p-4 rounded-lg;
+  }
+
+  .alert-success {
+    @apply bg-green-50 border border-green-200 text-green-800 p-4 rounded-lg;
+  }
+}
+
+@layer utilities {
+  /* 텍스트 말줄임 */
+  .text-ellipsis-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .text-ellipsis-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* 그라디언트 배경 */
+  .bg-gradient-primary {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  }
+
+  .bg-gradient-success {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  }
+
+  /* 그림자 효과 */
+  .shadow-soft {
+    box-shadow: 0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04);
+  }
+
+  .shadow-glow {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
+  }
+
+  /* 반응형 텍스트 크기 */
+  .text-responsive-xl {
+    @apply text-2xl md:text-3xl lg:text-4xl;
+  }
+
+  .text-responsive-lg {
+    @apply text-lg md:text-xl lg:text-2xl;
+  }
+
+  .text-responsive-base {
+    @apply text-sm md:text-base lg:text-lg;
+  }
+}
+
+/* 다크모드 지원 (추후 확장용) */
+@media (prefers-color-scheme: dark) {
+  /* 다크모드 스타일은 추후 추가 */
+}
+
+/* 프린트 스타일 */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    @apply text-black bg-white;
+  }
+}
+
+/* 접근성 개선 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 포커스 스타일 개선 */
+*:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+*:focus:not(:focus-visible) {
+  outline: none;
+}
