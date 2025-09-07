@@ -85,7 +85,7 @@ async function convertWithPythonService(fileBuffer: Buffer, filename: string): P
 
   // FormData 생성
   const formData = new FormData();
-  const blob = new Blob([fileBuffer], { type: 'application/octet-stream' });
+  const blob = new Blob([new Uint8Array(fileBuffer)], { type: 'application/octet-stream' });
   formData.append('file', blob, filename);
 
   console.log('📤 Python 서비스로 파일 전송 중...');
