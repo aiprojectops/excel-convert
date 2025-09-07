@@ -371,9 +371,14 @@ export default function FileUploader() {
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+              className={clsx(
+                "px-6 py-2 rounded-lg transition-colors",
+                selectedFile 
+                  ? "bg-gray-400 text-white hover:bg-gray-500" // 파일 선택 후: 회색
+                  : "bg-primary-600 text-white hover:bg-primary-700" // 파일 선택 전: 파란색
+              )}
             >
-              파일 선택
+              {selectedFile ? "다른 파일 선택" : "파일 선택"}
             </button>
           </div>
         )}
