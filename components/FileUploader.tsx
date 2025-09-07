@@ -384,35 +384,6 @@ export default function FileUploader() {
         )}
       </div>
 
-      {/* 옵션 */}
-      {selectedFile && status === 'idle' && (
-        <div className="mt-4 p-4 bg-gray-50 rounded-lg space-y-3">
-          <label className="flex items-center space-x-2 text-sm">
-            <input
-              type="checkbox"
-              checked={usePythonService}
-              onChange={(e) => setUsePythonService(e.target.checked)}
-              className="rounded border-gray-300"
-            />
-            <span className="font-medium">🐍 Python 서비스 사용 (권장)</span>
-          </label>
-          <p className="text-xs text-gray-600 ml-6">
-            더 강력한 Excel 처리 엔진으로 구 Excel 파일과 한글 인코딩을 완벽 지원합니다.
-          </p>
-          
-          {!usePythonService && (
-            <label className="flex items-center space-x-2 text-sm">
-              <input
-                type="checkbox"
-                checked={forceTextRecovery}
-                onChange={(e) => setForceTextRecovery(e.target.checked)}
-                className="rounded border-gray-300"
-              />
-              <span>텍스트 기반 복구 강제 실행 (표준 파서가 실패할 때 유용)</span>
-            </label>
-          )}
-        </div>
-      )}
 
       {/* 액션 버튼 */}
       {selectedFile && (
